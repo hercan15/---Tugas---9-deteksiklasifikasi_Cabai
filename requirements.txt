@@ -1,0 +1,6 @@
+ultralytics>=8.1.30
+opencv-python
+flask
+numpy
+Pillow
+tensorflow>=2.9.0

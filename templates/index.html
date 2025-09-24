@@ -1,0 +1,434 @@
+<!-- 
+  @Author: Your name
+  @Date:   2025-08-02 23:05:54
+  @Last Modified by:   Your name
+  @Last Modified time: 2025-09-15 18:43:34
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Chili Maturity Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 100%;
+            padding: 20px;
+            flex: 1;
+        }
+        
+        h1 {
+            margin: 20px 0;
+            text-align: center;
+            color: #333;
+        }
+        
+        #video-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            height: 0;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            background-color: #000;
+        }
+        
+        #video-stream {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        #toggle-btn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        #toggle-btn.paused {
+            background-color: #f44336;
+        }
+        
+        #status-indicator {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        #status-indicator.paused {
+            background-color: #f44336;
+        }
+        
+        .mode-selection {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .mode-selection label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+        
+        .size-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+        }
+        
+        .fullscreen-btn {
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+        
+        .fullscreen-btn:hover {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        
+        body.fullscreen-mode {
+            overflow: hidden;
+        }
+        
+        body.fullscreen-mode .container {
+            padding: 0;
+        }
+        
+        body.fullscreen-mode h1,
+        body.fullscreen-mode .controls {
+            display: none;
+        }
+        
+        body.fullscreen-mode #video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            padding-bottom: 0;
+            border-radius: 0;
+            z-index: 9999;
+        }
+        
+        body.fullscreen-mode .size-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+        }
+        
+        body.fullscreen-mode .fullscreen-btn {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Indikator fullscreen */
+        .fullscreen-indicator {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 10000;
+        }
+        
+        .fullscreen-indicator.show {
+            opacity: 1;
+        }
+        
+        /* Overlay kontrol dalam fullscreen */
+        .fullscreen-controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 30px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 10000;
+        }
+        
+        body.fullscreen-mode .fullscreen-controls {
+            opacity: 1;
+        }
+        
+        .fullscreen-controls:hover {
+            opacity: 1 !important;
+        }
+        
+        .fullscreen-controls button {
+            background-color: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .fullscreen-controls button:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Kontrol ukuran dan fullscreen -->
+        <div class="size-controls">
+            <div class="fullscreen-btn" id="fullscreen-toggle" title="Toggle Fullscreen">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Indikator fullscreen -->
+        <div class="fullscreen-indicator" id="fullscreen-indicator">
+            Mode Layar Penuh - Tekan ESC untuk keluar
+        </div>
+
+        <h1>Deteksi Kematangan Cabai Real-Time</h1>
+        
+        <div id="video-container">
+            <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Video Stream">
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <button id="toggle-btn" class="active">Stop Processing</button>
+                <div id="status-indicator" class="active">ACTIVE</div>
+            </div>
+            <div class="mode-selection">
+                <label for="mode_rgb">
+                    <input type="radio" id="mode_rgb" name="model_mode" value="rgb" {{ 'checked' if mode == 'RGB' else '' }}> RGB
+                </label>
+                <label for="mode_hsv">
+                    <input type="radio" id="mode_hsv" name="model_mode" value="hsv" {{ 'checked' if mode == 'HSV' else '' }}> HSV
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kontrol untuk mode fullscreen -->
+    <div class="fullscreen-controls">
+        <button id="fs-toggle-btn" class="active">Stop Processing</button>
+        <button id="exit-fullscreen-btn">Keluar Fullscreen</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const toggleBtn = document.getElementById('toggle-btn');
+            const fsToggleBtn = document.getElementById('fs-toggle-btn');
+            const statusIndicator = document.getElementById('status-indicator');
+            const modeRadios = document.querySelectorAll('input[name="model_mode"]');
+            const videoContainer = document.getElementById('video-container');
+            const videoStream = document.getElementById('video-stream');
+            const fullscreenToggle = document.getElementById('fullscreen-toggle');
+            const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
+            const fullscreenIndicator = document.getElementById('fullscreen-indicator');
+            const body = document.body;
+            
+            // Event listener untuk toggle fullscreen
+            fullscreenToggle.addEventListener('click', () => {
+                toggleFullscreen();
+            });
+            
+            // Event listener untuk keluar fullscreen
+            exitFullscreenBtn.addEventListener('click', () => {
+                if (document.fullscreenElement) {
+                    exitFullscreen();
+                }
+            });
+            
+            // Event listener untuk toggle processing dari fullscreen controls
+            fsToggleBtn.addEventListener('click', () => {
+                // Trigger click pada tombol toggle utama
+                toggleBtn.click();
+            });
+            
+            // Fungsi toggle fullscreen
+            function toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    // Masuk ke mode fullscreen
+                    if (videoContainer.requestFullscreen) {
+                        videoContainer.requestFullscreen();
+                    } else if (videoContainer.webkitRequestFullscreen) {
+                        videoContainer.webkitRequestFullscreen();
+                    } else if (videoContainer.msRequestFullscreen) {
+                        videoContainer.msRequestFullscreen();
+                    }
+                    
+                    body.classList.add('fullscreen-mode');
+                    
+                    // Tampilkan indikator sementara
+                    showFullscreenIndicator();
+                } else {
+                    exitFullscreen();
+                }
+            }
+            
+            // Fungsi keluar fullscreen
+            function exitFullscreen() {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                
+                body.classList.remove('fullscreen-mode');
+            }
+            
+            // Tampilkan indikator fullscreen
+            function showFullscreenIndicator() {
+                fullscreenIndicator.classList.add('show');
+                setTimeout(() => {
+                    fullscreenIndicator.classList.remove('show');
+                }, 2000);
+            }
+
+            // Event listener untuk perubahan status fullscreen
+            document.addEventListener('fullscreenchange', handleFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+            document.addEventListener('msfullscreenchange', handleFullscreenChange);
+            
+            function handleFullscreenChange() {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+                    body.classList.remove('fullscreen-mode');
+                }
+            }
+
+            // Kontrol untuk memulai/menghentikan pemrosesan
+            toggleBtn.addEventListener('click', () => {
+                fetch('/toggle', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        updateStatus(data.status);
+                    })
+                    .catch(error => console.error('Error toggling processing:', error));
+            });
+
+            // Kontrol untuk mengubah mode (RGB/HSV)
+            modeRadios.forEach(radio => {
+                radio.addEventListener('change', (event) => {
+                    const newMode = event.target.value;
+                    fetch('/set_mode', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ mode: newMode }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert(data.message);
+                            location.reload();
+                        } else {
+                            alert(data.message);
+                        }
+                    })
+                    .catch(error => console.error('Error setting model mode:', error));
+                });
+            });
+
+            function updateStatus(status) {
+                if (status === 'active') {
+                    toggleBtn.textContent = 'Stop Processing';
+                    toggleBtn.classList.remove('paused');
+                    toggleBtn.classList.add('active');
+                    fsToggleBtn.textContent = 'Stop Processing';
+                    fsToggleBtn.classList.remove('paused');
+                    fsToggleBtn.classList.add('active');
+                    statusIndicator.textContent = 'ACTIVE';
+                    statusIndicator.classList.remove('paused');
+                    statusIndicator.classList.add('active');
+                } else {
+                    toggleBtn.textContent = 'Start Processing';
+                    toggleBtn.classList.remove('active');
+                    toggleBtn.classList.add('paused');
+                    fsToggleBtn.textContent = 'Start Processing';
+                    fsToggleBtn.classList.remove('active');
+                    fsToggleBtn.classList.add('paused');
+                    statusIndicator.textContent = 'PAUSED';
+                    statusIndicator.classList.remove('active');
+                    statusIndicator.classList.add('paused');
+                }
+            }
+            
+            // Deteksi penekanan tombol ESC untuk keluar fullscreen
+            document.addEventListener('keydown', function(e) {
+                if (e.key === "Escape" && document.fullscreenElement) {
+                    exitFullscreen();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
