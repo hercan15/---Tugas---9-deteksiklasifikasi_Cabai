@@ -2,7 +2,7 @@
 # @Author: Your name
 # @Date: 2025-07-27 15:22:17
 # @Last Modified by:   Your name
-# @Last Modified time: 2025-09-15 19:05:05
+# @Last Modified time: 2025-09-24 14:48:04
 
 from flask import Flask, Response, render_template, request, jsonify
 import cv2
@@ -18,12 +18,11 @@ import json
 
 app = Flask(__name__)
 
-# ===== KONFIGURASI =====
 MODEL_MODE = "rgb"
 MODEL_DIR = "models"
 YOLO_MODEL = os.path.join(MODEL_DIR, "best.pt")
 
-# Inisialisasi model YOLOv8 OBB
+
 try:
     yolo = YOLO(YOLO_MODEL)
     print(f"Model YOLO OBB berhasil dimuat: {YOLO_MODEL}")
@@ -54,7 +53,7 @@ def load_tflite_model(mode):
     input_shape = input_details[0]['shape'][1:3]
     print(f"Model TFLite ({mode.upper()}) siap. Input shape: {input_shape}")
 
-# Muat model awal
+
 try:
     load_tflite_model(MODEL_MODE)
     try:
@@ -70,17 +69,17 @@ except Exception as e:
 
 STREAM_URL = "http://192.168.218.239:8080/videofeed"
 
-# Pengaturan
+
 TARGET_FPS = 20
 PROCESS_WIDTH = 1280
 BUFFER_SIZE = 10
-MIN_CONFIDENCE = 0.6  # Dikurangi dari 0.7 menjadi 0.6
+MIN_CONFIDENCE = 0.6  
 HISTORY_SIZE = 5
 
 COLORS = {
-    'Tidak Layak Petik': (0, 165, 255),  # Orange untuk hijau
-    'Layak Petik': (0, 255, 0),          # Hijau untuk merah
-    'Error': (0, 0, 255)                 # Merah untuk error
+    'Tidak Layak Petik': (0, 165, 255),  
+    'Layak Petik': (0, 255, 0),         
+    'Error': (0, 0, 255)                
 }
 
 frame_queue = deque(maxlen=BUFFER_SIZE)
@@ -89,14 +88,13 @@ frame_lock = threading.Lock()
 is_processing = True
 classification_history = {}
 
-# ===== FUNGSI PENDUKUNG =====
 
 def enhance_image_quality(image):
-    """Meningkatkan kualitas gambar untuk deteksi yang lebih baik"""
+ 
     if image is None:
         return None
         
-    # CLAHE untuk meningkatkan kontras
+  
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -104,7 +102,7 @@ def enhance_image_quality(image):
     lab = cv2.merge((l, a, b))
     enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
     
-    # Sharpening ringan
+
     kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
     enhanced = cv2.filter2D(enhanced, -1, kernel)
     
@@ -180,15 +178,15 @@ def cleanup_old_history(max_age_seconds=5):
         del classification_history[key]
 
 def crop_rotated_box(frame, points):
-    """Memotong area dalam bounding box oriented"""
+   
     try:
         if len(points) != 4:
             return None
         
-        # Pastikan points dalam format yang benar
+
         points = points.reshape(4, 2).astype(np.float32)
         
-        # Dapatkan bounding rect
+    
         rect = cv2.minAreaRect(points)
         box = cv2.boxPoints(rect)
         box = np.intp(box)
@@ -196,10 +194,10 @@ def crop_rotated_box(frame, points):
         width = int(rect[1][0])
         height = int(rect[1][1])
         
-        if width <= 5 or height <= 5:  # Minimum size threshold
+        if width <= 5 or height <= 5:  
             return None
         
-        # Pastikan orientasi konsisten
+
         src_pts = box.astype("float32")
         dst_pts = np.array([[0, height-1], [0, 0], [width-1, 0], [width-1, height-1]], dtype="float32")
         
@@ -215,27 +213,26 @@ def crop_rotated_box(frame, points):
         return None
 
 def is_green_chili_dominant(hsv_image):
-    """Deteksi dominasi warna hijau dengan threshold yang lebih ketat untuk membedakan cabai hijau dari daun"""
-    # Range hijau dalam HSV untuk cabai (lebih spesifik)
-    green_lower1 = np.array([35, 80, 40])    # Hue lebih tinggi, saturation lebih tinggi
-    green_upper1 = np.array([85, 255, 200])  # Value lebih rendah untuk menghindari daun terang
+ 
+    green_lower1 = np.array([35, 80, 40])    
+    green_upper1 = np.array([85, 255, 200])  
     
-    green_lower2 = np.array([30, 80, 40])    # Range tambahan untuk hijau muda
+    green_lower2 = np.array([30, 80, 40])    
     green_upper2 = np.array([95, 255, 180])
     
-    # Range untuk daun (lebih terang, saturation lebih rendah)
-    leaf_lower = np.array([30, 30, 100])     # Saturation rendah, value tinggi
+    
+    leaf_lower = np.array([30, 30, 100])     
     leaf_upper = np.array([90, 100, 255])
     
-    # Mask untuk hijau cabai
+    
     green_mask1 = cv2.inRange(hsv_image, green_lower1, green_upper1)
     green_mask2 = cv2.inRange(hsv_image, green_lower2, green_upper2)
     green_mask = cv2.bitwise_or(green_mask1, green_mask2)
     
-    # Mask untuk daun
+  
     leaf_mask = cv2.inRange(hsv_image, leaf_lower, leaf_upper)
     
-    # Hitung persentase piksel
+
     total_pixels = hsv_image.shape[0] * hsv_image.shape[1]
     green_pixels = cv2.countNonZero(green_mask)
     leaf_pixels = cv2.countNonZero(leaf_mask)
@@ -243,76 +240,75 @@ def is_green_chili_dominant(hsv_image):
     green_ratio = green_pixels / total_pixels
     leaf_ratio = leaf_pixels / total_pixels
     
-    # Hitung nilai rata-rata HSV untuk area hijau
+
     if green_pixels > 0:
         mean_h = np.mean(hsv_image[:,:,0][green_mask > 0])
         mean_s = np.mean(hsv_image[:,:,1][green_mask > 0])
         mean_v = np.mean(hsv_image[:,:,2][green_mask > 0])
         
-        # Kriteria cabai hijau: saturation tinggi, value sedang
+     
         is_green_hue = (35 <= mean_h <= 85)
-        is_high_saturation = mean_s > 60  # Saturation harus tinggi untuk cabai
-        is_medium_value = 40 < mean_v < 180  # Value tidak terlalu terang atau gelap
+        is_high_saturation = mean_s > 60  
+        is_medium_value = 40 < mean_v < 180  
         
-        # Pastikan ini bukan daun (leaf_ratio harus rendah)
+    
         return (green_ratio > 0.3 and leaf_ratio < 0.2 and 
                 is_green_hue and is_high_saturation and is_medium_value)
     
     return False
 
 def is_red_chili_dominant(hsv_image):
-    """Deteksi dominasi warna merah dengan threshold yang lebih ketat"""
-    # Range merah dalam HSV (lebih spesifik untuk cabai)
-    red_lower1 = np.array([0, 80, 40])      # Red low range
+
+
+    red_lower1 = np.array([0, 80, 40])      
     red_upper1 = np.array([10, 255, 255])
     
-    red_lower2 = np.array([170, 80, 40])    # Red high range (lingkaran warna)
+    red_lower2 = np.array([170, 80, 40])    
     red_upper2 = np.array([180, 255, 255])
     
-    # Mask untuk merah
+
     red_mask1 = cv2.inRange(hsv_image, red_lower1, red_upper1)
     red_mask2 = cv2.inRange(hsv_image, red_lower2, red_upper2)
     red_mask = cv2.bitwise_or(red_mask1, red_mask2)
-    
-    # Hitung persentase piksel merah
+
     total_pixels = hsv_image.shape[0] * hsv_image.shape[1]
     red_pixels = cv2.countNonZero(red_mask)
     red_ratio = red_pixels / total_pixels
     
-    # Hitung nilai rata-rata HSV untuk area merah
+ 
     if red_pixels > 0:
         mean_h = np.mean(hsv_image[:,:,0][red_mask > 0])
-        if mean_h > 90:  # Adjust untuk lingkaran warna
+        if mean_h > 90: 
             mean_h = 180 - mean_h
         
         mean_s = np.mean(hsv_image[:,:,1][red_mask > 0])
         mean_v = np.mean(hsv_image[:,:,2][red_mask > 0])
         
-        # Kriteria tambahan: nilai Hue harus dalam range merah
+    
         is_red_hue = (mean_h <= 10) or (mean_h >= 170)
-        is_high_saturation = mean_s > 60  # Saturation harus tinggi untuk cabai merah
-        is_medium_value = 40 < mean_v < 220  # Value tidak terlalu terang atau gelap
+        is_high_saturation = mean_s > 60  
+        is_medium_value = 40 < mean_v < 220 
         
         return red_ratio > 0.35 and is_red_hue and is_high_saturation and is_medium_value
     
     return False
 
 def classify_chili(cropped_img):
-    """Klasifikasi kematangan cabai dengan validasi warna yang lebih ketat"""
+    
     global interpreter, input_details, output_details, input_shape, MODEL_MODE
     
     if interpreter is None or cropped_img is None:
         return "Error", 0.0
     
     try:
-        # Konversi ke HSV untuk analisis warna
+       
         hsv = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2HSV)
         
-        # Deteksi warna dominan dengan threshold yang lebih ketat
+      
         is_green = is_green_chili_dominant(hsv)
         is_red = is_red_chili_dominant(hsv)
         
-        # Validasi silang dengan model
+     
         img_resized = cv2.resize(cropped_img, (input_shape[1], input_shape[0]))
         
         if MODEL_MODE == 'hsv':
@@ -332,23 +328,23 @@ def classify_chili(cropped_img):
         model_confidence = float(probs[model_class_id])
         model_class = CLASS_NAMES[model_class_id]
         
-        # Validasi silang: jika deteksi warna dan model tidak sesuai
+    
         if is_green and model_class == "Layak Petik":
-            # Prioritas untuk deteksi warna hijau (lebih dapat diandalkan)
-            if model_confidence < 0.7:  # Jika confidence model rendah
+        
+            if model_confidence < 0.7:  
                 return "Tidak Layak Petik", max(0.8, model_confidence)
         
         if is_red and model_class == "Tidak Layak Petik":
-            # Prioritas untuk deteksi warna merah
+         
             if model_confidence < 0.7:
                 return "Layak Petik", max(0.8, model_confidence)
         
-        # Jika tidak ada konflik atau confidence model tinggi
+
         return model_class, model_confidence
         
     except Exception as e:
         print(f"Classification error: {e}")
-        # Fallback ke deteksi warna sederhana
+    
         try:
             hsv = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2HSV)
             if is_green_chili_dominant(hsv):
@@ -361,19 +357,19 @@ def classify_chili(cropped_img):
             return "Error", 0.5
 
 def process_frame(frame):
-    """Proses frame untuk deteksi dan klasifikasi cabai"""
+ 
     if yolo is None or interpreter is None or frame is None:
         return frame
         
     with model_lock:
         try:
-            # Resize frame
+        
             h, w = frame.shape[:2]
             scale = PROCESS_WIDTH / w
             new_h = int(h * scale)
             frame_resized = cv2.resize(frame, (PROCESS_WIDTH, new_h))
             
-            # Enhance kualitas gambar
+       
             frame_enhanced = enhance_image_quality(frame_resized)
             if frame_enhanced is None:
                 return frame_resized
@@ -381,20 +377,20 @@ def process_frame(frame):
             quality_score = calculate_image_quality(frame_enhanced)
             adaptive_conf = adaptive_confidence_threshold(quality_score)
             
-            # Deteksi objek dengan YOLOv8 OBB (threshold lebih rendah: 0.6)
+           
             results = yolo(frame_enhanced, conf=0.6, verbose=False, imgsz=640)
             cleanup_old_history()
             
-            # Konversi ke PIL untuk drawing
+
             frame_rgb = cv2.cvtColor(frame_enhanced, cv2.COLOR_BGR2RGB)
             frame_pil = Image.fromarray(frame_rgb)
             draw = ImageDraw.Draw(frame_pil)
             
-            # Process detections
+    
             for r in results:
                 if hasattr(r, 'obb') and r.obb is not None:
                     for box in r.obb:
-                        # Hanya proses jika yang terdeteksi adalah Cabai
+                       
                         class_id = int(box.cls)
                         class_name = yolo.names[class_id] if hasattr(yolo, 'names') else "Unknown"
                         
@@ -402,14 +398,14 @@ def process_frame(frame):
                             points = box.xyxyxyxy.cpu().numpy().reshape(4, 2).astype(int)
                             score = float(box.conf)
                             
-                            # Crop gambar cabai
+                        
                             cropped_bgr = crop_rotated_box(frame_enhanced, points)
                             
-                            if cropped_bgr is not None and cropped_bgr.size > 100:  # Minimum size
-                                # Klasifikasi kematangan
+                            if cropped_bgr is not None and cropped_bgr.size > 100:  
+                                
                                 maturity, conf = classify_chili(cropped_bgr)
                                 
-                                # Smoothing hasil
+                             
                                 center_x = np.mean(points[:, 0])
                                 center_y = np.mean(points[:, 1])
                                 obj_id = f"{int(center_x)}_{int(center_y)}"
@@ -418,24 +414,24 @@ def process_frame(frame):
                                     obj_id, maturity, conf
                                 )
                                 
-                                # Dapatkan fitur warna
+                               
                                 mean_rgb, mean_hsv = get_color_features(cropped_bgr)
                                 
-                                # Tentukan warna bounding box
+                             
                                 color = COLORS.get(smoothed_maturity, (255, 255, 255))
                                 
-                                # Gambar bounding box (polygon)
+                          
                                 draw.polygon([tuple(p) for p in points], outline=color, width=3)
                                 
-                                # Tampilkan informasi
+                          
                                 text_label = f"{smoothed_maturity} ({smoothed_conf:.0%})"
                                 text_rgb = f"RGB: {mean_rgb}"
                                 text_hsv = f"HSV: {mean_hsv}"
                                 
-                                # Position text above bounding box
+                             
                                 text_y_start = max(points[:, 1].min() - 60, 10)
                                 
-                                # Calculate text background
+                           
                                 text_bbox_label = draw.textbbox((points[0][0], text_y_start), text_label, font=font)
                                 text_bbox_rgb = draw.textbbox((points[0][0], text_y_start + 25), text_rgb, font=font_small)
                                 text_bbox_hsv = draw.textbbox((points[0][0], text_y_start + 45), text_hsv, font=font_small)
@@ -445,7 +441,7 @@ def process_frame(frame):
                                 bg_x1 = max(text_bbox_label[2], text_bbox_rgb[2], text_bbox_hsv[2]) + 5
                                 bg_y1 = text_bbox_hsv[3] + 5
                                 
-                                # Draw background and text
+                               
                                 draw.rectangle([bg_x0, bg_y0, bg_x1, bg_y1], fill=color)
                                 draw.text((points[0][0], text_y_start), text_label, font=font, fill=(0, 0, 0))
                                 draw.text((points[0][0], text_y_start + 25), text_rgb, font=font_small, fill=(0, 0, 0))
@@ -459,9 +455,9 @@ def process_frame(frame):
             traceback.print_exc()
             return frame
 
-# ===== THREADS =====
+
 def capture_thread():
-    """Thread untuk menangkap frame dari stream"""
+   
     cap = None
     while True:
         try:
@@ -494,7 +490,7 @@ def capture_thread():
             time.sleep(5)
 
 def processing_thread():
-    """Thread untuk memproses frame"""
+   
     global output_frame
     while True:
         if frame_queue:
@@ -505,7 +501,7 @@ def processing_thread():
         else:
             time.sleep(0.01)
 
-# ===== FLASK ROUTES =====
+
 @app.route('/')
 def index():
     return render_template('index.html', mode=MODEL_MODE.upper())
@@ -516,7 +512,7 @@ def video_feed():
         while True:
             with frame_lock:
                 if output_frame is None:
-                    # Frame placeholder
+                 
                     blank_frame = np.zeros((480, 640, 3), dtype=np.uint8)
                     cv2.putText(blank_frame, "Menunggu Stream...", (50, 240), 
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
@@ -600,10 +596,10 @@ def manual_calibration():
     
     return jsonify({'status': 'error', 'message': 'Aksi tidak valid'})
 
-# ===== MAIN =====
+
 if __name__ == '__main__':
     try:
-        # Start threads
+ 
         threading.Thread(target=capture_thread, daemon=True).start()
         threading.Thread(target=processing_thread, daemon=True).start()
         
